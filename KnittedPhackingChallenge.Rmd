@@ -1,0 +1,111 @@
+---
+title: "phacking_challenge"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+Loading in some library things
+```{r,message=FALSE,warning=FALSE}
+library(ggpubr)
+library(tidyverse)
+library(Hmisc)
+library(corrplot)
+library(correlation)
+library(na.tools)
+library(lubridate)
+```
+
+Reading in the dataset
+```{r,message=FALSE}
+setwd("C:/Users/ntu39/OneDrive/Desktop/Qbio class")
+coviddat<-read.csv("owid-covid-data.csv")
+```
+
+Adding some new variables
+```{r,message=FALSE}
+coviddat<-mutate(coviddat, lengcont=as.numeric(nchar(continent)))
+coviddat<-mutate(coviddat, lengcountry=as.numeric(nchar(location)))
+coviddat<-mutate(coviddat,cmonth=month(date))
+coviddat<-mutate(coviddat,cmday=mday(date))
+coviddat<-mutate(coviddat,cminute=minute(date))
+```
+
+Setting some initial values
+```{r,message=FALSE}
+fullg<-length(coviddat)
+removed<-6
+divl<-fullg-removed
+```
+
+Getting rid of some bad variables, the first 4 variables are character based, tests units and the 53rd variable are just bad
+```{r,message=FALSE}
+coviddat<-coviddat[,c(5:fullg)]
+coviddat<-subset(coviddat,select=-`tests_units`)
+coviddat<-coviddat[,-c(53)]
+```
+
+Calculating pearson coefficients (variable vs total COVID cases) and p values
+```{r,message=FALSE,warning=FALSE}
+corR2<-vector()
+corp<-vector()
+for (x in 1:divl) {corR2<-c(cor.test(coviddat[,1],coviddat[,x], method = "pearson", use = "complete.obs")$estimate, corR2)}
+for (i in 1:divl) {corp<-c(cor.test(coviddat[,1],coviddat[,i], method = "pearson", use = "complete.obs")$p.value, corp)}
+
+```
+
+Assembling the data table
+```{r}
+cornames<-rev(colnames(coviddat))
+corp<-data.frame(corp)
+corR2<-data.frame(corR2)
+cornames<-data.frame(cornames)
+cortot<-cbind(cornames,corR2)
+cortot<-cbind(cortot,corp) 
+cortot<-data.frame(cortot)
+colnames(cortot)<-c("Variable","R2Val","P-value")
+cortot<-filter(cortot,`P-value`<0.05)
+print(cortot)
+```
+
+Rereading data
+```{r,echo=FALSE}
+coviddat<-read.csv("owid-covid-data.csv")
+coviddat<-mutate(coviddat, lengcont=as.numeric(nchar(continent)))
+coviddat<-mutate(coviddat, lengcountry=as.numeric(nchar(location)))
+```
+
+Main correlation testing
+```{r}
+cor.test(coviddat$lengcountry,coviddat$total_cases, method="pearson",use="complete.obs")
+```
+
+Finding influential countries
+```{r, echo=FALSE}
+covid_4 <- aggregate(coviddat$total_cases, by=list(category = coviddat$location), FUN=sum)
+coviddat$location<-as.factor(coviddat$location)
+xat<-summary(lm(coviddat$total_cases~coviddat$location))
+xat <- coef(xat)
+sig<-xat[xat[,"Pr(>|t|)"]<0.05,]
+printCoefmat(sig)
+```
+
+Finding the most influential countries with long and short letter names (and overfitting)
+```{r}
+sig_countries <- c("Africa", "Argentina", "Asia", "Brazil", "Colombia", "Europe", "European Union", "France", "Germany", "India", "Indonesia", "Iran", "Italy", "Mexico", "North America", "Peru", "Poland", "Russia", "South Africa", "South America", "Spain", "Turkey", "Ukraine", "United Kingdom", "United States", "World")
+covid_sig <- coviddat %>% filter(location %in% sig_countries)
+xat2<-summary(lm(covid_sig$total_cases~covid_sig$location))
+xat2<- coef(xat2)
+sig2<-xat2[xat2[,"Pr(>|t|)"]<0.05,]
+printCoefmat(sig2)
+```
+
+Conclusions:
+We created a pipeline to analyze significant correlations between different variables and the total number of COVID-19 cases within the COVID-19 case dataset. Notably, we found a highly significant negative correlation between the length of a country name (in characters) and the number of cases within (r=-0.0315 [-0.0374,-0.0256], p=8.28E-26). This clearly indicates a sinister conspiracy between countries with long names to destroy countries with short names, presumably because longer-named countries are jealous of the convenience of shorter names. We created a linear model to determine countries most and least affected by the COVID pandemic to investigate who could have committed this heinous crime. We found, after overfitting our model, that Asia, Brazil, India (making up the shorter-length named countries), the United States and the European Union (making up the longer-length named countries) were significantly influential (all p<2.2E-16) in this model, which suggests that Asia, Brazil and India were specifically targeted. Also, the fact that the correlation is basically 0 is meaningless and should be ignored because the p-value is significant. 
+
+
+
+
+
+
+
